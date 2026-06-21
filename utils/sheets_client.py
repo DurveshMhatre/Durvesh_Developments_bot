@@ -463,3 +463,45 @@ def save_package_recommendation(
         value_input_option="USER_ENTERED",
     )
     logger.info("Saved package recommendation: %s → %s", phone, package_name)
+
+
+# ── Scrape Targets Configuration ─────────────────────────────────
+
+SCRAPE_TARGET_HEADERS = ["City", "Category", "Active", "LastScrapedAt"]
+
+
+def get_active_scrape_targets() -> list[dict[str, Any]]:
+    """
+    Fetch active scrape targets from the 'ScrapeTargets' worksheet.
+    If the worksheet does not exist, it is created with headers.
+    """
+    try:
+        ss = _get_spreadsheet()
+        ws = _ensure_worksheet(ss, "ScrapeTargets", SCRAPE_TARGET_HEADERS)
+        records = ws.get_all_records()
+        
+        active_targets = []
+        for idx, r in enumerate(records, start=2):
+            active_val = str(r.get("Active", "")).strip().lower()
+            if active_val in ("true", "yes", "1", "active"):
+                active_targets.append({
+                    "city": str(r.get("City", "")).strip(),
+                    "category": str(r.get("Category", "")).strip(),
+                    "row": idx
+                })
+        return active_targets
+    except Exception as exc:
+        logger.error("Failed to read scrape targets from Sheets: %s", exc)
+        return []
+
+
+def update_scrape_target_last_scraped(row: int) -> None:
+    """Update the LastScrapedAt cell for a specific scrape target row."""
+    try:
+        ss = _get_spreadsheet()
+        ws = _ensure_worksheet(ss, "ScrapeTargets", SCRAPE_TARGET_HEADERS)
+        last_scraped_col = SCRAPE_TARGET_HEADERS.index("LastScrapedAt") + 1
+        ws.update_cell(row, last_scraped_col, _now_iso())
+        logger.info("Updated scrape target row %d with last scraped timestamp.", row)
+    except Exception as exc:
+        logger.error("Failed to update scrape target row %d timestamp: %s", row, exc)

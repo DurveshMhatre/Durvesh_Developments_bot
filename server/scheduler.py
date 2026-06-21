@@ -30,12 +30,28 @@ def _run_daily_scrape():
     from phase1_leads.justdial_scraper import scrape as scrape_justdial
     from phase1_leads.lead_scorer import score_lead_dict
     from phase1_leads.dedup import deduplicate
-    from utils.sheets_client import append_leads, get_all_leads
+    from utils.sheets_client import (
+        append_leads,
+        get_all_leads,
+        get_active_scrape_targets,
+        update_scrape_target_last_scraped,
+    )
 
     all_new_leads = []
 
-    for city in TARGET_CITIES:
-        for btype in BUSINESS_TYPES:
+    # Try fetching dynamic targets from Google Sheets first
+    targets = get_active_scrape_targets()
+
+    if targets:
+        logger.info("Loaded %d active scrape targets from Google Sheet ScrapeTargets.", len(targets))
+        for t in targets:
+            city = t["city"]
+            btype = t["category"]
+            row = t["row"]
+            if not city or not btype:
+                continue
+
+            logger.info("Running scrape for: %s in %s...", btype, city)
             try:
                 # Google Maps
                 gmaps_leads = scrape_gmaps(city, btype)
@@ -49,6 +65,27 @@ def _run_daily_scrape():
                 all_new_leads.extend(justdial_leads)
             except Exception as exc:
                 logger.error("JustDial scraper error (%s/%s): %s", city, btype, exc)
+
+            # Update last scraped timestamp in Sheets
+            update_scrape_target_last_scraped(row)
+    else:
+        # Fallback to .env values if Google Sheets has no active targets
+        logger.info("No active scrape targets in Google Sheets. Using config values: TARGET_CITIES=%s, BUSINESS_TYPES=%s", TARGET_CITIES, BUSINESS_TYPES)
+        for city in TARGET_CITIES:
+            for btype in BUSINESS_TYPES:
+                try:
+                    # Google Maps
+                    gmaps_leads = scrape_gmaps(city, btype)
+                    all_new_leads.extend(gmaps_leads)
+                except Exception as exc:
+                    logger.error("Google Maps scraper error (%s/%s): %s", city, btype, exc)
+
+                try:
+                    # JustDial
+                    justdial_leads = scrape_justdial(city, btype)
+                    all_new_leads.extend(justdial_leads)
+                except Exception as exc:
+                    logger.error("JustDial scraper error (%s/%s): %s", city, btype, exc)
 
     # Score all leads
     for lead in all_new_leads:
