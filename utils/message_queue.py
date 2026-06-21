@@ -8,8 +8,6 @@ Provides:
 - Logging of all send attempts
 """
 
-from __future__ import annotations
-
 import asyncio
 import random
 import time

@@ -27,6 +27,7 @@ def _run_daily_scrape():
     logger.info("═══ Daily scrape job started ═══")
 
     from phase1_leads.google_maps_scraper import scrape as scrape_gmaps
+    from phase1_leads.justdial_scraper import scrape as scrape_justdial
     from phase1_leads.lead_scorer import score_lead_dict
     from phase1_leads.dedup import deduplicate
     from utils.sheets_client import append_leads, get_all_leads
@@ -41,6 +42,13 @@ def _run_daily_scrape():
                 all_new_leads.extend(gmaps_leads)
             except Exception as exc:
                 logger.error("Google Maps scraper error (%s/%s): %s", city, btype, exc)
+
+            try:
+                # JustDial
+                justdial_leads = scrape_justdial(city, btype)
+                all_new_leads.extend(justdial_leads)
+            except Exception as exc:
+                logger.error("JustDial scraper error (%s/%s): %s", city, btype, exc)
 
     # Score all leads
     for lead in all_new_leads:
@@ -72,6 +80,34 @@ def _run_outreach_cycle():
     logger.info("═══ Outreach cycle started ═══")
     from phase2_whatsapp.outreach_scheduler import run_outreach_cycle
     run_outreach_cycle()
+
+
+def run_startup_cycle() -> None:
+    """
+    Run one immediate scrape pass when the server starts.
+
+    This lets the system fetch fresh leads without waiting for the
+    first scheduled cron window.
+    """
+    logger.info("═══ Startup automation cycle started ═══")
+
+    try:
+        from utils.sheets_client import normalize_existing_leads
+        normalize_existing_leads()
+    except Exception as exc:
+        logger.error("Startup lead-normalization failed: %s", exc)
+
+    try:
+        _run_daily_scrape()
+    except Exception as exc:
+        logger.error("Startup scrape cycle failed: %s", exc)
+
+    try:
+        _run_outreach_cycle()
+    except Exception as exc:
+        logger.error("Startup outreach cycle failed: %s", exc)
+
+    logger.info("═══ Startup automation cycle finished ═══")
 
 
 def _run_daily_summary():
@@ -117,7 +153,6 @@ def start_scheduler() -> None:
         replace_existing=True,
     )
 
-    # Outreach every 2 hours during 9 AM - 8 PM
     _scheduler.add_job(
         _run_outreach_cycle,
         trigger=CronTrigger(hour="9-20/2", minute=0),
@@ -138,7 +173,7 @@ def start_scheduler() -> None:
     _scheduler.start()
     logger.info(
         "Scheduler started with jobs: daily_scrape (@ %d:00), "
-        "outreach (9-20 every 2h), daily_summary (@ 21:00).",
+        "outreach_cycle (every 2h 9-20), daily_summary (@ 21:00)",
         SCRAPE_SCHEDULE_HOUR,
     )
 

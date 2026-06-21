@@ -38,13 +38,20 @@ class TestTransitions:
     def test_requirements_to_package(self):
         assert can_advance(Stage.REQUIREMENTS, Stage.PACKAGE)
 
-    def test_package_to_done(self):
-        assert can_advance(Stage.PACKAGE, Stage.DONE)
+    def test_package_to_call_schedule(self):
+        assert can_advance(Stage.PACKAGE, Stage.CALL_SCHEDULE)
+
+    def test_demo_to_done(self):
+        assert can_advance(Stage.DEMO, Stage.DONE)
 
     def test_not_interested_from_any(self):
         assert can_advance(Stage.WELCOME, Stage.NOT_INTERESTED)
         assert can_advance(Stage.REQUIREMENTS, Stage.NOT_INTERESTED)
         assert can_advance(Stage.PACKAGE, Stage.NOT_INTERESTED)
+        assert can_advance(Stage.CALL_SCHEDULE, Stage.NOT_INTERESTED)
+        assert can_advance(Stage.CONTRACT, Stage.NOT_INTERESTED)
+        assert can_advance(Stage.PAYMENT, Stage.NOT_INTERESTED)
+        assert can_advance(Stage.DEMO, Stage.NOT_INTERESTED)
 
     def test_invalid_backward_transition(self):
         assert not can_advance(Stage.REQUIREMENTS, Stage.WELCOME)
@@ -79,7 +86,19 @@ class TestGetNextStage:
         assert get_next_stage(Stage.REQUIREMENTS) == Stage.PACKAGE
 
     def test_package_next(self):
-        assert get_next_stage(Stage.PACKAGE) == Stage.DONE
+        assert get_next_stage(Stage.PACKAGE) == Stage.CALL_SCHEDULE
+
+    def test_call_schedule_next(self):
+        assert get_next_stage(Stage.CALL_SCHEDULE) == Stage.CONTRACT
+
+    def test_contract_next(self):
+        assert get_next_stage(Stage.CONTRACT) == Stage.PAYMENT
+
+    def test_payment_next(self):
+        assert get_next_stage(Stage.PAYMENT) == Stage.DEMO
+
+    def test_demo_next(self):
+        assert get_next_stage(Stage.DEMO) == Stage.DONE
 
     def test_done_has_no_next(self):
         assert get_next_stage(Stage.DONE) is None

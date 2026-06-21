@@ -21,8 +21,8 @@ class TestFormatters:
     def test_format_packages_not_empty(self):
         result = _format_packages()
         assert "Starter" in result
-        assert "Business" in result
-        assert "Premium" in result
+        assert "Professional" in result
+        assert "E-Commerce" in result
 
     def test_format_empty_history(self):
         result = _format_history([])
@@ -69,25 +69,25 @@ class TestFallbackResponse:
 class TestRecommendPackage:
     """Test the rule-based package recommendation."""
 
-    def test_ecommerce_gets_premium(self):
+    def test_ecommerce_gets_ecommerce(self):
         data = {"features": "e-commerce, online store"}
         pkg = recommend_package(data)
-        assert pkg["name"] == "Premium"
+        assert pkg["name"] == "E-Commerce"
 
     def test_booking_gets_premium(self):
         data = {"features": "online booking system, admin panel"}
         pkg = recommend_package(data)
-        assert pkg["name"] == "Premium"
+        assert pkg["name"] == "Professional"
 
     def test_many_pages_gets_premium(self):
         data = {"pages_needed": "15 pages"}
         pkg = recommend_package(data)
-        assert pkg["name"] == "Premium"
+        assert pkg["name"] == "Professional"
 
     def test_medium_pages_gets_business(self):
         data = {"pages_needed": "5 pages"}
         pkg = recommend_package(data)
-        assert pkg["name"] == "Business"
+        assert pkg["name"] == "Starter"
 
     def test_low_budget_gets_starter(self):
         data = {"budget": "kam budget hai", "pages_needed": "2"}
@@ -97,4 +97,5 @@ class TestRecommendPackage:
     def test_default_is_business(self):
         data = {"pages_needed": "3", "features": "contact form"}
         pkg = recommend_package(data)
-        assert pkg["name"] == "Business"
+        assert pkg["name"] == "Starter"
+

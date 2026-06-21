@@ -12,11 +12,32 @@ import httpx
 
 from config.settings import META_ACCESS_TOKEN, META_PHONE_NUMBER_ID
 from utils.logger import get_logger
+from utils.phone_utils import validate_indian_phone
 
 logger = get_logger(__name__)
 
 _API_VERSION = "v21.0"
 _BASE_URL = f"https://graph.facebook.com/{_API_VERSION}"
+
+
+def _to_whatsapp_recipient(phone: str) -> str:
+    """
+    Normalize an Indian phone number to WhatsApp API recipient format.
+
+    Meta expects the recipient in international format without the ``+`` sign.
+    """
+    valid, normalized = validate_indian_phone(phone)
+    if valid:
+        return normalized.lstrip("+")
+    return "".join(ch for ch in str(phone) if ch.isdigit())
+
+
+def _raise_for_meta_error(resp: httpx.Response) -> None:
+    """Raise an HTTPStatusError with Meta's response body included."""
+    if resp.is_error:
+        detail = resp.text.strip()
+        message = f"Meta API error {resp.status_code}: {detail}" if detail else f"Meta API error {resp.status_code}"
+        raise httpx.HTTPStatusError(message, request=resp.request, response=resp)
 
 
 async def send_text_message(to: str, text: str) -> dict[str, Any]:
@@ -38,17 +59,43 @@ async def send_text_message(to: str, text: str) -> dict[str, Any]:
     payload = {
         "messaging_product": "whatsapp",
         "recipient_type": "individual",
-        "to": to,
+        "to": _to_whatsapp_recipient(to),
         "type": "text",
         "text": {"body": text},
     }
 
     async with httpx.AsyncClient(timeout=15) as client:
         resp = await client.post(url, json=payload, headers=headers)
-        resp.raise_for_status()
+        _raise_for_meta_error(resp)
         data = resp.json()
         logger.info("Meta API: message sent to %s", to)
         return data
+
+
+def send_text_message_sync(to: str, text: str) -> dict[str, Any]:
+    """
+    Send a text message via the Meta WhatsApp Cloud API (Synchronous).
+    """
+    url = f"{_BASE_URL}/{META_PHONE_NUMBER_ID}/messages"
+    headers = {
+        "Authorization": f"Bearer {META_ACCESS_TOKEN}",
+        "Content-Type": "application/json",
+    }
+    payload = {
+        "messaging_product": "whatsapp",
+        "recipient_type": "individual",
+        "to": _to_whatsapp_recipient(to),
+        "type": "text",
+        "text": {"body": text},
+    }
+
+    with httpx.Client(timeout=15) as client:
+        resp = client.post(url, json=payload, headers=headers)
+        _raise_for_meta_error(resp)
+        data = resp.json()
+        logger.info("Meta API: message sent to %s (sync)", to)
+        return data
+
 
 
 async def send_template_message(
@@ -84,14 +131,14 @@ async def send_template_message(
     payload = {
         "messaging_product": "whatsapp",
         "recipient_type": "individual",
-        "to": to,
+        "to": _to_whatsapp_recipient(to),
         "type": "template",
         "template": template_obj,
     }
 
     async with httpx.AsyncClient(timeout=15) as client:
         resp = await client.post(url, json=payload, headers=headers)
-        resp.raise_for_status()
+        _raise_for_meta_error(resp)
         data = resp.json()
         logger.info("Meta API: template '%s' sent to %s", template_name, to)
         return data
@@ -127,14 +174,14 @@ async def send_media_message(
     payload = {
         "messaging_product": "whatsapp",
         "recipient_type": "individual",
-        "to": to,
+        "to": _to_whatsapp_recipient(to),
         "type": media_type,
         media_type: media_obj,
     }
 
     async with httpx.AsyncClient(timeout=15) as client:
         resp = await client.post(url, json=payload, headers=headers)
-        resp.raise_for_status()
+        _raise_for_meta_error(resp)
         data = resp.json()
         logger.info("Meta API: %s sent to %s", media_type, to)
         return data

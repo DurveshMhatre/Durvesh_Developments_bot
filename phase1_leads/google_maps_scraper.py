@@ -14,6 +14,7 @@ from typing import Any
 from playwright.async_api import async_playwright, Page, TimeoutError as PwTimeout
 
 from utils.logger import get_logger
+from utils.phone_utils import classify_phone_type, normalize_phone
 from utils.telegram_alert import send_alert
 
 logger = get_logger(__name__)
@@ -151,7 +152,6 @@ async def _scrape_async(city: str, business_type: str) -> list[dict[str, Any]]:
     logger.info("Scraping Google Maps for: %s", query)
 
     leads: list[dict[str, Any]] = []
-    import re
     import urllib.parse
 
     _BROWSER_TIMEOUT_MS = 300_000  # 5-minute max for entire browser session
@@ -198,19 +198,9 @@ async def _scrape_async(city: str, business_type: str) -> list[dict[str, Any]]:
             # Filter: keep only leads WITHOUT a website AND WITH a phone number
             for listing in all_listings:
                 if not listing["website"] and listing["phone"]:
-                    # Classify the phone number as mobile or landline
-                    raw_phone = listing["phone"]
-                    digits = re.sub(r"\D", "", raw_phone)
-
-                    # Strip leading "91" country code if present
-                    if digits.startswith("91") and len(digits) == 12:
-                        digits = digits[2:]
-
-                    # Indian mobile numbers: exactly 10 digits starting with 6, 7, 8, or 9
-                    if len(digits) == 10 and digits[0] in "6789":
-                        listing["phone_type"] = "mobile"
-                    else:
-                        listing["phone_type"] = "landline"
+                    listing["phone"] = normalize_phone(listing["phone"])
+                    phone_type = classify_phone_type(listing["phone"])
+                    listing["phone_type"] = phone_type if phone_type != "unknown" else "landline"
 
                     listing["city"] = city
                     listing["type"] = business_type

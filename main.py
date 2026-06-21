@@ -16,7 +16,7 @@ def main():
         "server.app:app",
         host=SERVER_HOST,
         port=SERVER_PORT,
-        reload=False,
+        reload=True,
         log_level="info",
     )
 

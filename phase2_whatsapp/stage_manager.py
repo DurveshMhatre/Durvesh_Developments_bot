@@ -1,10 +1,15 @@
 """
-3-stage conversation state machine.
+7-stage conversation state machine.
 
 Stages:
-    1. WELCOME   — cold outreach / intro
-    2. REQUIREMENTS — collect business details
-    3. PACKAGE   — recommend package + share price / UPI
+    1. WELCOME        — cold outreach / intro
+    2. REQUIREMENTS   — collect business details (web form)
+    3. PACKAGE        — recommend package + answer pricing questions
+    4. CALL_SCHEDULE  — schedule Google Meet / phone call
+    5. CONTRACT       — share contract terms / agreement
+    6. PAYMENT        — collect 50% advance via UPI
+    7. DEMO           — share website demo for client approval
+    Terminal: DONE / NOT_INTERESTED
 """
 
 from __future__ import annotations
@@ -23,6 +28,10 @@ class Stage(str, Enum):
     WELCOME = "WELCOME"
     REQUIREMENTS = "REQUIREMENTS"
     PACKAGE = "PACKAGE"
+    CALL_SCHEDULE = "CALL_SCHEDULE"
+    CONTRACT = "CONTRACT"
+    PAYMENT = "PAYMENT"
+    DEMO = "DEMO"
     DONE = "DONE"
     NOT_INTERESTED = "NOT_INTERESTED"
 
@@ -31,7 +40,11 @@ class Stage(str, Enum):
 _TRANSITIONS: dict[Stage, list[Stage]] = {
     Stage.WELCOME: [Stage.REQUIREMENTS, Stage.NOT_INTERESTED],
     Stage.REQUIREMENTS: [Stage.PACKAGE, Stage.NOT_INTERESTED],
-    Stage.PACKAGE: [Stage.DONE, Stage.NOT_INTERESTED],
+    Stage.PACKAGE: [Stage.CALL_SCHEDULE, Stage.NOT_INTERESTED],
+    Stage.CALL_SCHEDULE: [Stage.CONTRACT, Stage.NOT_INTERESTED],
+    Stage.CONTRACT: [Stage.PAYMENT, Stage.NOT_INTERESTED],
+    Stage.PAYMENT: [Stage.DEMO, Stage.NOT_INTERESTED],
+    Stage.DEMO: [Stage.DONE, Stage.NOT_INTERESTED],
     Stage.DONE: [],
     Stage.NOT_INTERESTED: [],
 }
@@ -82,7 +95,11 @@ def get_next_stage(current: Stage) -> Stage | None:
     forward_map: dict[Stage, Stage] = {
         Stage.WELCOME: Stage.REQUIREMENTS,
         Stage.REQUIREMENTS: Stage.PACKAGE,
-        Stage.PACKAGE: Stage.DONE,
+        Stage.PACKAGE: Stage.CALL_SCHEDULE,
+        Stage.CALL_SCHEDULE: Stage.CONTRACT,
+        Stage.CONTRACT: Stage.PAYMENT,
+        Stage.PAYMENT: Stage.DEMO,
+        Stage.DEMO: Stage.DONE,
     }
     return forward_map.get(current)
 

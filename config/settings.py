@@ -43,10 +43,17 @@ META_PHONE_NUMBER_ID: str = os.getenv("META_PHONE_NUMBER_ID", "")
 META_ACCESS_TOKEN: str = os.getenv("META_ACCESS_TOKEN", "")
 META_VERIFY_TOKEN: str = os.getenv("META_VERIFY_TOKEN", "your_custom_verify_token")
 META_APP_SECRET: str = os.getenv("META_APP_SECRET", "")
+META_WELCOME_TEMPLATE_NAME: str = os.getenv("META_WELCOME_TEMPLATE_NAME", "welcome_message_a")
+META_FOLLOW_UP_1_TEMPLATE_NAME: str = os.getenv("META_FOLLOW_UP_1_TEMPLATE_NAME", "")
+META_FOLLOW_UP_2_TEMPLATE_NAME: str = os.getenv("META_FOLLOW_UP_2_TEMPLATE_NAME", "")
+META_FOLLOW_UP_3_TEMPLATE_NAME: str = os.getenv("META_FOLLOW_UP_3_TEMPLATE_NAME", "")
+META_TEMPLATE_LANGUAGE_CODE: str = os.getenv("META_TEMPLATE_LANGUAGE_CODE", "en_US")
 
 # ── Telegram Admin Alerts ─────────────────────────────────────────
 TELEGRAM_BOT_TOKEN: str = os.getenv("TELEGRAM_BOT_TOKEN", "")
 TELEGRAM_CHAT_ID: str = os.getenv("TELEGRAM_CHAT_ID", "")
+ADMIN_PHONE_NUMBER: str = os.getenv("ADMIN_PHONE_NUMBER", "")
+SERVER_PUBLIC_URL: str = os.getenv("SERVER_PUBLIC_URL", "http://localhost:8000").rstrip("/")
 
 # ── Business Config ──────────────────────────────────────────────
 COMPANY_NAME: str = os.getenv("COMPANY_NAME", "YourCompany")
@@ -56,46 +63,131 @@ UPI_ID: str = os.getenv("UPI_ID", "name@upi")
 
 # ── Package Pricing ──────────────────────────────────────────────
 PACKAGES = {
+    "Single Page": {
+        "name": "Single Page",
+        "price": 2999,
+        "price_display": "₹2,999",
+        "renewal_price": "₹2,999",
+        "delivery_time": "24 hours",
+        "revision_count": "1",
+        "features": [
+            "1 polished landing page",
+            "Free domain (1st year)",
+            "Mobile responsive design",
+            "WhatsApp & Google Maps integration",
+            "Contact form",
+            "SSL certificate",
+            "15 days free support",
+        ],
+    },
     "Starter": {
         "name": "Starter",
-        "price": 9999,
-        "price_display": "₹9,999",
+        "price": 6999,
+        "price_display": "₹6,999",
+        "renewal_price": "₹3,499",
+        "delivery_time": "48 hours",
+        "revision_count": "2",
         "features": [
-            "Professional 3-page website",
-            "Mobile responsive design",
-            "Contact form integration",
+            "Up to 5-page website",
+            "Free domain (1st year)",
             "Basic SEO setup",
-            "1 month free support",
+            "Image gallery",
+            "WhatsApp & enquiry forms",
+            "SSL certificate",
+            "30 days free support",
+            "2 revision rounds",
         ],
     },
-    "Business": {
-        "name": "Business",
-        "price": 19999,
-        "price_display": "₹19,999",
+    "Professional": {
+        "name": "Professional",
+        "price": 16999,
+        "price_display": "₹16,999",
+        "renewal_price": "₹4,999",
+        "delivery_time": "72 hours",
+        "revision_count": "3",
         "features": [
-            "Up to 7-page website",
-            "Premium responsive design",
-            "Google Maps integration",
-            "WhatsApp chat button",
-            "Advanced SEO + Google My Business",
-            "Social media integration",
-            "3 months free support",
+            "Up to 10-page website",
+            "Free domain (1st year)",
+            "Razorpay payment gateway integration",
+            "Up to 25 listings/products",
+            "Google Business Profile setup",
+            "Lead capture system",
+            "60 days free support",
+            "3 revision rounds",
         ],
     },
-    "Premium": {
-        "name": "Premium",
-        "price": 34999,
-        "price_display": "₹34,999",
+    "E-Commerce": {
+        "name": "E-Commerce",
+        "price": 20999,
+        "price_display": "₹20,999",
+        "renewal_price": "₹6,999",
+        "delivery_time": "5 days",
+        "revision_count": "5",
         "features": [
-            "Unlimited pages",
-            "Custom UI/UX design",
-            "Online booking / e-commerce",
-            "Payment gateway integration",
-            "Full SEO + analytics dashboard",
-            "Admin panel",
-            "6 months free support",
+            "Full online store",
+            "100+ products capacity",
+            "Razorpay (UPI/Cards/EMI)",
+            "Inventory & order tracking",
+            "Shipping integration",
+            "Google Business Profile setup",
+            "Owner training session",
+            "90 days free support",
+            "5 revision rounds",
         ],
     },
+}
+
+AUTOMATION_PACKAGES = {
+    "WhatsApp Lead Management": {
+        "name": "WhatsApp Lead Management",
+        "price": 4999,
+        "price_display": "₹4,999",
+        "delivery_time": "48-72 hours",
+        "features": [
+            "Auto-capture leads from website forms",
+            "Instant WhatsApp notifications",
+            "Custom auto-reply templates",
+            "Data stored in Google Sheets",
+            "Follow-up reminder system",
+        ],
+    },
+    "Google Sheets Automation": {
+        "name": "Google Sheets Automation",
+        "price": 3999,
+        "price_display": "₹3,999",
+        "delivery_time": "48-72 hours",
+        "features": [
+            "Form -> Sheets automation",
+            "Email & WhatsApp notifications",
+            "Data formatting & cleanup",
+            "Scheduled reports",
+            "Auto-sync between platforms",
+        ],
+    },
+    "Custom Business Automation": {
+        "name": "Custom Business Automation",
+        "price": 7999,
+        "price_display": "Starting ₹7,999",
+        "delivery_time": "5-7 days",
+        "features": [
+            "Custom workflow design",
+            "Multi-platform integration",
+            "Invoice automation",
+            "Inventory management sync",
+            "Free consultation included",
+        ],
+    },
+}
+
+ADDITIONAL_SERVICES = {
+    "GST Registration": "Govt fees + ₹599 (3-5 days)",
+    "FSSAI Food License": "Govt fees + ₹399 (7-10 days)",
+    "Udyam (MSME)": "₹399 (24 hours)",
+    "Passport Services": "Govt fees + ₹599",
+    "Payment Gateway Setup": "₹1,999 (Razorpay, PayU, Paytm)",
+    "WhatsApp Business Setup": "₹1,999 (24 hours)",
+    "SEO & Maintenance": "₹1,999/month (Cancel anytime)",
+    "Google Business Profile": "₹599 (Free with Pro & E-Com packages)",
 }
 
 # ── Scraper Config ───────────────────────────────────────────────

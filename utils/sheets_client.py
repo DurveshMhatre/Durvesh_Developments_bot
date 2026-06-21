@@ -14,6 +14,7 @@ import time
 from typing import Any
 
 import gspread
+from gspread.utils import rowcol_to_a1
 
 from config.settings import (
     GOOGLE_SHEETS_ID,
@@ -21,6 +22,7 @@ from config.settings import (
     OAUTH_TOKEN_FILE,
 )
 from utils.logger import get_logger
+from utils.phone_utils import classify_phone_type
 
 logger = get_logger(__name__)
 
@@ -92,14 +94,24 @@ def _get_client() -> gspread.Client:
     """
     global _gspread_client
     if _gspread_client is None:
-        _gspread_client = gspread.oauth(
-            credentials_filename=str(OAUTH_CREDENTIALS_FILE),
-            authorized_user_filename=str(OAUTH_TOKEN_FILE),
-            scopes=[
-                "https://www.googleapis.com/auth/spreadsheets",
-                "https://www.googleapis.com/auth/drive",
-            ],
-        )
+        try:
+            _gspread_client = gspread.oauth(
+                credentials_filename=str(OAUTH_CREDENTIALS_FILE),
+                authorized_user_filename=str(OAUTH_TOKEN_FILE),
+                scopes=[
+                    "https://www.googleapis.com/auth/spreadsheets",
+                    "https://www.googleapis.com/auth/drive",
+                ],
+            )
+        except Exception as exc:
+            err = str(exc).lower()
+            if "invalid_grant" in err and "expired or revoked" in err:
+                raise RuntimeError(
+                    "Google OAuth token is expired/revoked. Regenerate "
+                    f"'{OAUTH_TOKEN_FILE}' by deleting it and running "
+                    "'python auth_sheets.py'."
+                ) from exc
+            raise
     return _gspread_client
 
 
@@ -162,6 +174,17 @@ def _now_iso() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
 
 
+def _sheet_phone_value(phone: str) -> str:
+    """Return a phone number as explicit text so Sheets keeps the leading +."""
+    normalized = _normalize_phone(phone)
+    return f'="{normalized}"' if normalized else ""
+
+
+def _update_cell_raw(ws: gspread.Worksheet, row: int, col: int, value: str) -> None:
+    """Update a single cell preserving text values like +91 phone numbers."""
+    ws.update(rowcol_to_a1(row, col), [[value]], raw=False)
+
+
 # ══════════════════════════════════════════════════════════════════
 #  PUBLIC API — Leads
 # ══════════════════════════════════════════════════════════════════
@@ -200,7 +223,7 @@ def append_leads(leads: list[dict[str, Any]]) -> int:
     for lead in leads:
         rows.append([
             lead.get("name", ""),
-            _normalize_phone(lead.get("phone", "")),
+            _sheet_phone_value(lead.get("phone", "")),
             lead.get("phone_type", "mobile"),
             lead.get("type", ""),
             lead.get("city", ""),
@@ -312,7 +335,7 @@ def append_conversation(
     ss = _get_spreadsheet()
     ws = _ensure_worksheet(ss, "Conversations", CONVERSATION_HEADERS)
     ws.append_row(
-        [_normalize_phone(phone), _now_iso(), direction, message, stage],
+        [_sheet_phone_value(phone), _now_iso(), direction, message, stage],
         value_input_option="USER_ENTERED",
     )
 
@@ -337,7 +360,7 @@ def save_requirements(phone: str, data: dict[str, Any]) -> None:
     ws = _ensure_worksheet(ss, "Requirements", REQUIREMENTS_HEADERS)
     ws.append_row(
         [
-            _normalize_phone(phone),
+            _sheet_phone_value(phone),
             data.get("business_name", ""),
             data.get("services_description", ""),
             data.get("pages_needed", ""),
@@ -366,6 +389,66 @@ def get_requirements(phone: str) -> dict[str, Any] | None:
 #  PUBLIC API — Package Recommendations
 # ══════════════════════════════════════════════════════════════════
 
+def normalize_existing_leads() -> int:
+    """
+    Normalize existing lead phone values and phone types in the Leads sheet.
+
+    Uses a single batch_update call to stay well within the 60 writes/min
+    free-tier quota (1 API call regardless of how many rows need fixing).
+
+    Returns the number of cell updates applied.
+    """
+    global _leads_cache_time
+
+    ss = _get_spreadsheet()
+    ws = _ensure_worksheet(ss, "Leads", LEAD_HEADERS)
+    records = ws.get_all_records()
+
+    phone_col = LEAD_HEADERS.index("Phone") + 1
+    phone_type_col = LEAD_HEADERS.index("PhoneType") + 1
+
+    # Collect all changes first, apply in one batch
+    batch_cells: list[dict] = []  # list of {"range": "A1", "values": [[val]]}
+
+    for idx, lead in enumerate(records, start=2):
+        raw_phone = str(lead.get("Phone", "")).strip()
+        if not raw_phone:
+            continue
+
+        normalized_phone = _normalize_phone(raw_phone)
+        classified_type = classify_phone_type(normalized_phone)
+        normalized_type = classified_type if classified_type != "unknown" else str(
+            lead.get("PhoneType", "landline")
+        ).strip().lower()
+
+        current_type = str(lead.get("PhoneType", "")).strip().lower()
+
+        if raw_phone != normalized_phone:
+            cell_addr = rowcol_to_a1(idx, phone_col)
+            batch_cells.append({
+                "range": cell_addr,
+                "values": [[_sheet_phone_value(normalized_phone)]],
+            })
+
+        if current_type != normalized_type:
+            cell_addr = rowcol_to_a1(idx, phone_type_col)
+            batch_cells.append({
+                "range": cell_addr,
+                "values": [[normalized_type]],
+            })
+
+    if not batch_cells:
+        logger.debug("normalize_existing_leads: nothing to update.")
+        return 0
+
+    # Apply all changes in one API call (avoids rate limits)
+    ws.batch_update(batch_cells, value_input_option="USER_ENTERED")
+    _leads_cache_time = 0  # Invalidate cache
+    logger.info("Normalized %d lead phone/phone-type cells in Sheets (single batch).", len(batch_cells))
+
+    return len(batch_cells)
+
+
 def save_package_recommendation(
     phone: str,
     package_name: str,
@@ -376,7 +459,7 @@ def save_package_recommendation(
     ss = _get_spreadsheet()
     ws = _ensure_worksheet(ss, "PackageRecommendations", PACKAGE_HEADERS)
     ws.append_row(
-        [_normalize_phone(phone), package_name, price, _now_iso(), status],
+        [_sheet_phone_value(phone), package_name, price, _now_iso(), status],
         value_input_option="USER_ENTERED",
     )
     logger.info("Saved package recommendation: %s → %s", phone, package_name)

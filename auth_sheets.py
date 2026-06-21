@@ -11,17 +11,17 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from utils.sheets_client import get_all_leads
 
 def main():
-    print("🔄 Initializing Google Sheets OAuth Flow...")
+    print("Initializing Google Sheets OAuth Flow...")
     print("If you haven't authenticated yet, a browser window will open.")
     print("Please log in with the Google Account that has access to the Sheet.")
     
     try:
         # Calling this will trigger gspread.oauth() and open the browser
         leads = get_all_leads()
-        print(f"✅ Authentication Successful! `token.json` has been generated.")
-        print(f"📊 Successfully read {len(leads)} rows from the Leads sheet.")
+        print("Authentication successful. `token.json` has been generated.")
+        print(f"Successfully read {len(leads)} rows from the Leads sheet.")
     except Exception as e:
-        print(f"❌ Error during authentication: {e}")
+        print(f"Error during authentication: {e}")
 
 if __name__ == "__main__":
     main()

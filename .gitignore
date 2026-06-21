@@ -2,8 +2,7 @@
 
 # Environment & secrets
 .env
-config/credentials/*.json
-config/credentials/token.json
+config/credentials/
 
 # Python
 __pycache__/
@@ -46,3 +45,13 @@ desktop.ini
 /blob-report/
 /playwright/.cache/
 /playwright/.auth/
+/Bug-Fix_Implemantation-Plan.md
+/PROJECT_RUN_PROCESS.md
+/Website_change.txt
+/yesterday_chat_transcript.md
+
+# Development scratchpads, IDE configs and backups
+.continue/
+chat.txt
+data/
+phase2_whatsapp/templates_New.py

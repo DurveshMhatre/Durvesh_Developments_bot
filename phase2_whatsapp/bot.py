@@ -11,7 +11,7 @@ import asyncio
 from datetime import datetime
 from typing import Any
 
-from config.settings import PACKAGES, WHATSAPP_MODE
+from config.settings import PACKAGES, WHATSAPP_MODE, SERVER_PUBLIC_URL
 from phase2_whatsapp import meta_cloud_api
 from phase2_whatsapp.conversation_engine import process_message, recommend_package
 from phase2_whatsapp.stage_manager import (
@@ -26,6 +26,11 @@ from phase2_whatsapp.templates import (
     INTERESTED_HANDOFF,
     NOT_INTERESTED_RESPONSE,
     PACKAGE_RECOMMENDATION,
+    CALL_SCHEDULE_MSG,
+    CONTRACT_TERMS_MSG,
+    PAYMENT_REQUEST_MSG,
+    DEMO_IN_PROGRESS_MSG,
+    PROJECT_STARTED_MSG,
     format_features_list,
     format_template,
 )
@@ -105,10 +110,13 @@ async def handle_incoming_message(
     # 2. Get current stage
     current_stage = get_stage(lead.get("CurrentStage", "WELCOME"))
 
-    # Skip if terminal states
+    # If lead is in a terminal stage but initiates a new message, reset to WELCOME so bot handles the conversation
     if current_stage in (Stage.DONE, Stage.NOT_INTERESTED):
-        logger.info("Lead %s is in terminal stage %s — ignoring.", phone, current_stage.value)
-        return
+        logger.info("Lead %s was in terminal stage %s but initiated a new message. Resetting to WELCOME.", phone, current_stage.value)
+        current_stage = Stage.WELCOME
+        update_lead_field(phone, "CurrentStage", Stage.WELCOME.value)
+        update_lead_status(phone, "In Conversation")
+
 
     # 3. Load conversation history
     history = get_conversation_history(phone, limit=10)
@@ -134,6 +142,7 @@ async def handle_incoming_message(
         stage=current_stage,
         history=history,
         collected_data=collected_data,
+        phone=phone,
     )
 
     response_text = result.get("response", "")
@@ -164,9 +173,15 @@ async def handle_incoming_message(
         next_stage = get_next_stage(current_stage)
 
         if current_stage == Stage.WELCOME and next_stage == Stage.REQUIREMENTS:
-            # Moving to requirements — send AI response
-            await _send(phone, response_text)
-            append_conversation(phone, "out", response_text, Stage.REQUIREMENTS.value)
+            # Moving to requirements — send requirements form link instead of AI questions
+            form_link = f"{SERVER_PUBLIC_URL}/requirements-form/{phone}"
+            form_msg = (
+                "Dhanyawad! To get started, please fill out this quick form with your "
+                f"business requirements so I can recommend the best plan for you:\n\n{form_link}\n\n"
+                "Once filled, bas 'DONE' reply kijiye! 😊"
+            )
+            await _send(phone, form_msg)
+            append_conversation(phone, "out", form_msg, Stage.REQUIREMENTS.value)
             current_stage = advance(current_stage, Stage.REQUIREMENTS)
             update_lead_field(phone, "CurrentStage", Stage.REQUIREMENTS.value)
             update_lead_status(phone, "In Conversation")
@@ -196,22 +211,148 @@ async def handle_incoming_message(
             update_lead_field(phone, "CurrentStage", Stage.PACKAGE.value)
             save_package_recommendation(phone, pkg["name"], pkg["price"])
 
-        elif current_stage == Stage.PACKAGE and next_stage == Stage.DONE:
-            # Client accepted — send handoff message
-            handoff_text = format_template(
-                INTERESTED_HANDOFF,
+        elif current_stage == Stage.PACKAGE and next_stage == Stage.CALL_SCHEDULE:
+            # Client agreed to a call — send call scheduling message
+            call_msg = format_template(
+                CALL_SCHEDULE_MSG,
                 business_name=collected_data.get("business_name", ""),
-                phone=phone,
             )
-            await _send(phone, handoff_text)
-            append_conversation(phone, "out", handoff_text, Stage.DONE.value)
+            await _send(phone, response_text)
+            append_conversation(phone, "out", response_text, Stage.PACKAGE.value)
+            await asyncio.sleep(2)
+            await _send(phone, call_msg)
+            append_conversation(phone, "out", call_msg, Stage.CALL_SCHEDULE.value)
+
+            current_stage = advance(current_stage, Stage.CALL_SCHEDULE)
+            update_lead_field(phone, "CurrentStage", Stage.CALL_SCHEDULE.value)
+            update_lead_status(phone, "Call Scheduling")
+
+            send_alert(
+                f"📞 *CALL REQUESTED*\n\n"
+                f"Client: *{collected_data.get('business_name', '')}*\n"
+                f"Phone: `{phone}`\n\n"
+                f"Client wants to schedule a call. Check WhatsApp!",
+                level="info",
+            )
+
+        elif current_stage == Stage.CALL_SCHEDULE and next_stage == Stage.CONTRACT:
+            # Client confirmed call time — send contract terms
+            rec_pkg = recommend_package(collected_data)
+            advance_amount = f"{rec_pkg['price'] // 2:,}"
+            balance_amount = f"{rec_pkg['price'] - rec_pkg['price'] // 2:,}"
+
+            contract_msg = format_template(
+                CONTRACT_TERMS_MSG,
+                business_name=collected_data.get("business_name", ""),
+                package_name=rec_pkg["name"],
+                price_display=rec_pkg["price_display"],
+                delivery_time=rec_pkg.get("delivery_time", "72 hours"),
+                revision_count=rec_pkg.get("revision_count", "3"),
+                advance_amount=advance_amount,
+                balance_amount=balance_amount,
+            )
+            await _send(phone, response_text)
+            append_conversation(phone, "out", response_text, Stage.CALL_SCHEDULE.value)
+            await asyncio.sleep(2)
+            await _send(phone, contract_msg)
+            append_conversation(phone, "out", contract_msg, Stage.CONTRACT.value)
+
+            current_stage = advance(current_stage, Stage.CONTRACT)
+            update_lead_field(phone, "CurrentStage", Stage.CONTRACT.value)
+            update_lead_status(phone, "Contract Sent")
+
+            send_alert(
+                f"🗓️ *CALL CONFIRMED — CONTRACT SENT*\n\n"
+                f"Client: *{collected_data.get('business_name', '')}*\n"
+                f"Phone: `{phone}`\n"
+                f"Package: *{rec_pkg['name']}* ({rec_pkg['price_display']})\n\n"
+                f"Schedule the Google Meet / call ASAP!",
+                level="info",
+            )
+
+        elif current_stage == Stage.CONTRACT and next_stage == Stage.PAYMENT:
+            # Client agreed to terms — send payment request
+            rec_pkg = recommend_package(collected_data)
+            advance_amount = f"{rec_pkg['price'] // 2:,}"
+
+            payment_msg = format_template(
+                PAYMENT_REQUEST_MSG,
+                business_name=collected_data.get("business_name", ""),
+                package_name=rec_pkg["name"],
+                price_display=rec_pkg["price_display"],
+                advance_amount=advance_amount,
+            )
+            await _send(phone, response_text)
+            append_conversation(phone, "out", response_text, Stage.CONTRACT.value)
+            await asyncio.sleep(2)
+            await _send(phone, payment_msg)
+            append_conversation(phone, "out", payment_msg, Stage.PAYMENT.value)
+
+            current_stage = advance(current_stage, Stage.PAYMENT)
+            update_lead_field(phone, "CurrentStage", Stage.PAYMENT.value)
+            update_lead_status(phone, "Payment Pending")
+
+            send_alert(
+                f"📝 *CONTRACT ACCEPTED — PAYMENT PENDING*\n\n"
+                f"Client: *{collected_data.get('business_name', '')}*\n"
+                f"Phone: `{phone}`\n"
+                f"Package: *{rec_pkg['name']}* ({rec_pkg['price_display']})\n"
+                f"Advance: *₹{advance_amount}*\n\n"
+                f"Waiting for 50% advance payment.",
+                level="info",
+            )
+
+        elif current_stage == Stage.PAYMENT and next_stage == Stage.DEMO:
+            # Client says they paid — send demo in progress
+            rec_pkg = recommend_package(collected_data)
+
+            demo_msg = format_template(
+                DEMO_IN_PROGRESS_MSG,
+                business_name=collected_data.get("business_name", ""),
+                package_name=rec_pkg["name"],
+                delivery_time=rec_pkg.get("delivery_time", "72 hours"),
+            )
+            await _send(phone, response_text)
+            append_conversation(phone, "out", response_text, Stage.PAYMENT.value)
+            await asyncio.sleep(2)
+            await _send(phone, demo_msg)
+            append_conversation(phone, "out", demo_msg, Stage.DEMO.value)
+
+            current_stage = advance(current_stage, Stage.DEMO)
+            update_lead_field(phone, "CurrentStage", Stage.DEMO.value)
+            update_lead_status(phone, "In Progress")
+
+            send_alert(
+                f"💰 *PAYMENT CONFIRMED — START WORK!*\n\n"
+                f"Client: *{collected_data.get('business_name', '')}*\n"
+                f"Phone: `{phone}`\n"
+                f"Package: *{rec_pkg['name']}*\n\n"
+                f"⚡ Client says payment done. VERIFY on UPI!\n"
+                f"Start building the demo website!",
+                level="info",
+            )
+
+        elif current_stage == Stage.DEMO and next_stage == Stage.DONE:
+            # Client approved demo — send project started / final message
+            rec_pkg = recommend_package(collected_data)
+            balance_amount = f"{rec_pkg['price'] - rec_pkg['price'] // 2:,}"
+
+            done_msg = format_template(
+                PROJECT_STARTED_MSG,
+                business_name=collected_data.get("business_name", ""),
+                balance_amount=balance_amount,
+            )
+            await _send(phone, response_text)
+            append_conversation(phone, "out", response_text, Stage.DEMO.value)
+            await asyncio.sleep(2)
+            await _send(phone, done_msg)
+            append_conversation(phone, "out", done_msg, Stage.DONE.value)
 
             current_stage = advance(current_stage, Stage.DONE)
             update_lead_field(phone, "CurrentStage", Stage.DONE.value)
-            update_lead_status(phone, "Interested - Handoff")
+            update_lead_status(phone, "Completed - Go Live")
 
-            # Alert admin on Telegram
-            rec_pkg = recommend_package(collected_data)
+            # Alert admin
             admin_text = format_template(
                 ADMIN_NEW_INTERESTED_LEAD,
                 business_name=collected_data.get("business_name", ""),
@@ -224,8 +365,15 @@ async def handle_incoming_message(
                 package_name=rec_pkg["name"],
                 price_display=rec_pkg["price_display"],
             )
-            send_alert(admin_text, level="info")
-            logger.info("🎉 Lead %s converted! Admin notified.", phone)
+            send_alert(
+                f"✅ *DEMO APPROVED — GO LIVE!*\n\n"
+                f"Client: *{collected_data.get('business_name', '')}*\n"
+                f"Phone: `{phone}`\n"
+                f"Package: *{rec_pkg['name']}* ({rec_pkg['price_display']})\n\n"
+                f"🎉 Client approved the demo! Collect balance ₹{balance_amount} and deploy!",
+                level="info",
+            )
+            logger.info("🎉 Lead %s completed full pipeline! Admin notified.", phone)
 
     else:
         # Normal response — no stage change

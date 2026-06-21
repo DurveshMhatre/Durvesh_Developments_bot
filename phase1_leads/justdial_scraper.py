@@ -17,6 +17,7 @@ import requests
 from bs4 import BeautifulSoup
 
 from utils.logger import get_logger
+from utils.phone_utils import classify_phone_type, normalize_phone
 from utils.telegram_alert import send_alert
 
 logger = get_logger(__name__)
@@ -136,11 +137,9 @@ def _parse_listing_page(html: str, city: str, category: str) -> list[dict[str, A
             if not name or not phone:
                 continue
 
-            # Classify phone type (consistent with google_maps_scraper)
-            digits_only = re.sub(r"[^\d]", "", phone)
-            if len(digits_only) == 10 and digits_only[0] in "6789":
-                phone_type = "mobile"
-            else:
+            phone = normalize_phone(phone)
+            phone_type = classify_phone_type(phone)
+            if phone_type == "unknown":
                 phone_type = "landline"
 
             listings.append({

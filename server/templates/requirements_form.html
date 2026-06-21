@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Website Requirements — Durvesh Developments</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-gradient: linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%);
+      --accent-color: #6366f1;
+      --accent-hover: #4f46e5;
+      --card-bg: rgba(30, 41, 59, 0.7);
+      --border-color: rgba(255, 255, 255, 0.1);
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Outfit', sans-serif;
+      background: var(--bg-gradient);
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      color: var(--text-main);
+      padding: 20px;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 600px;
+      background: var(--card-bg);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid var(--border-color);
+      border-radius: 24px;
+      padding: 40px 30px;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+      animation: fadeIn 0.6s ease-out;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(20px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .header {
+      text-align: center;
+      margin-bottom: 35px;
+    }
+
+    .logo {
+      font-size: 24px;
+      font-weight: 700;
+      background: linear-gradient(to right, #818cf8, #c084fc);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 10px;
+    }
+
+    .title {
+      font-size: 28px;
+      font-weight: 600;
+      margin-bottom: 8px;
+      color: var(--text-main);
+    }
+
+    .subtitle {
+      font-size: 15px;
+      color: var(--text-muted);
+      line-height: 1.5;
+    }
+
+    .form-group {
+      margin-bottom: 24px;
+    }
+
+    label {
+      display: block;
+      font-size: 14px;
+      font-weight: 500;
+      margin-bottom: 8px;
+      color: #cbd5e1;
+    }
+
+    input[type="text"],
+    textarea,
+    select {
+      width: 100%;
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 14px 16px;
+      font-size: 15px;
+      color: var(--text-main);
+      font-family: inherit;
+      transition: all 0.3s ease;
+      outline: none;
+    }
+
+    input[type="text"]:focus,
+    textarea:focus,
+    select:focus {
+      border-color: var(--accent-color);
+      box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
+      background: rgba(15, 23, 42, 0.8);
+    }
+
+    textarea {
+      resize: vertical;
+      min-height: 100px;
+    }
+
+    .features-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-top: 8px;
+    }
+
+    .checkbox-label {
+      display: flex;
+      align-items: center;
+      background: rgba(15, 23, 42, 0.4);
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+      padding: 12px;
+      cursor: pointer;
+      font-size: 14px;
+      transition: all 0.2s ease;
+    }
+
+    .checkbox-label:hover {
+      background: rgba(15, 23, 42, 0.6);
+      border-color: rgba(99, 102, 241, 0.4);
+    }
+
+    .checkbox-label input {
+      margin-right: 10px;
+      accent-color: var(--accent-color);
+      width: 16px;
+      height: 16px;
+    }
+
+    .submit-btn {
+      width: 100%;
+      background: var(--accent-color);
+      border: none;
+      border-radius: 12px;
+      padding: 16px;
+      font-size: 16px;
+      font-weight: 600;
+      color: white;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      margin-top: 15px;
+      box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+    }
+
+    .submit-btn:hover {
+      background: var(--accent-hover);
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(99, 102, 241, 0.4);
+    }
+
+    .submit-btn:active {
+      transform: translateY(0);
+    }
+
+    @media (max-width: 480px) {
+      .container {
+        padding: 30px 20px;
+      }
+      .features-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div class="logo">Durvesh Developments</div>
+      <h1 class="title">Tell Us About Your Project</h1>
+      <p class="subtitle">Please fill out this form so we can recommend the perfect plan and custom features for your business.</p>
+    </div>
+
+    <form action="/requirements-form/{{ phone }}" method="POST">
+      <div class="form-group">
+        <label for="business_name">Business / Shop Name</label>
+        <input type="text" id="business_name" name="business_name" placeholder="e.g. Sharma Clinic, Thane" required value="{{ default_name }}">
+      </div>
+
+      <div class="form-group">
+        <label for="services_description">What products or services do you offer?</label>
+        <textarea id="services_description" name="services_description" placeholder="Briefly describe what your business does..." required></textarea>
+      </div>
+
+      <div class="form-group">
+        <label for="pages_needed">Number of pages needed</label>
+        <select id="pages_needed" name="pages_needed" required>
+          <option value="1 Page (Quick Presence)">Single Page / Landing Page (₹2,999)</option>
+          <option value="5 Pages (Starter)" selected>Starter / 5 Pages (₹6,999)</option>
+          <option value="10 Pages (Professional)">Professional / 10 Pages (₹16,999)</option>
+          <option value="Unlimited (E-Commerce)">Full E-Commerce Store (₹20,999)</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label>Features you need</label>
+        <div class="features-grid">
+          <label class="checkbox-label">
+            <input type="checkbox" name="feature_whatsapp" value="WhatsApp Button" checked>
+            WhatsApp Button
+          </label>
+          <label class="checkbox-label">
+            <input type="checkbox" name="feature_maps" value="Google Maps Integration" checked>
+            Google Maps
+          </label>
+          <label class="checkbox-label">
+            <input type="checkbox" name="feature_payments" value="Payment Gateway">
+            Online Payments
+          </label>
+          <label class="checkbox-label">
+            <input type="checkbox" name="feature_booking" value="Booking/Appointment System">
+            Appointment Booking
+          </label>
+          <label class="checkbox-label">
+            <input type="checkbox" name="feature_gallery" value="Portfolio/Product Gallery" checked>
+            Photo Gallery
+          </label>
+          <label class="checkbox-label">
+            <input type="checkbox" name="feature_seo" value="Advanced SEO Setup">
+            Advanced SEO
+          </label>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label for="design_preferences">Design Style Preferences (Optional)</label>
+        <input type="text" id="design_preferences" name="design_preferences" placeholder="e.g. Modern, Minimalist, Dark mode, Colorful">
+      </div>
+
+      <div class="form-group">
+        <label for="budget">Any other notes or custom requests? (Optional)</label>
+        <textarea id="budget" name="budget" placeholder="Enter any extra details or custom features you need..."></textarea>
+      </div>
+
+      <button type="submit" class="submit-btn">Submit Requirements</button>
+    </form>
+  </div>
+</body>
+</html>

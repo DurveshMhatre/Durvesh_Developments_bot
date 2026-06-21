@@ -15,6 +15,8 @@ from config.settings import (
     PACKAGES,
     PORTFOLIO_URL,
     UPI_ID,
+    AUTOMATION_PACKAGES,
+    ADDITIONAL_SERVICES,
 )
 from phase2_whatsapp.stage_manager import Stage, get_missing_fields
 from utils.gemini_client import generate_json
@@ -76,37 +78,79 @@ RULES:
 _STAGE_INSTRUCTIONS = {
     Stage.WELCOME: (
         "GOAL: The client just received our intro message. Gauge their interest.\n"
-        "- If they seem interested, ask about their business\n"
-        "- If they ask what we do, explain briefly with examples\n"
-        "- set should_advance_stage=true when client shows interest and is willing to talk"
+        "- If they seem interested, express excitement and prepare to send the requirements form link.\n"
+        "- If they ask what we do, explain briefly with examples.\n"
+        "- Set should_advance_stage=true when the client shows interest and is willing to talk."
     ),
     Stage.REQUIREMENTS: (
-        "GOAL: Collect business requirements. You need these fields:\n"
-        "- business_name (their business/shop name)\n"
-        "- services_description (what they sell/do)\n"
-        "- pages_needed (how many pages, or what pages they want)\n"
-        "Optional: features, budget, design_preferences\n\n"
-        "MISSING FIELDS: {missing_fields}\n\n"
-        "Ask about missing fields naturally — DO NOT ask all at once.\n"
-        "Set should_advance_stage=true ONLY when business_name, services_description, "
-        "and pages_needed are ALL collected."
+        "GOAL: Guide the client to fill out the web requirements form.\n"
+        "- The link to the form is: {form_link}\n"
+        "- If they ask questions (e.g. about packages, prices, features, or portfolio), answer them fully, naturally, and politely, and then gently remind them to fill out the form: {form_link} to proceed with their custom quote.\n"
+        "- If they share requirements directly in the chat, note them in data_collected and answer normally, but ask them to submit the form at {form_link} to complete the submission.\n"
+        "- If they reply 'DONE' (or state they filled it) AND the collected data below contains at least business_name, services_description, and pages_needed, set should_advance_stage=true.\n"
+        "- If they say they filled it/DONE but the collected data is still empty, politely explain that we haven't received their form inputs yet, and ask them to make sure they click 'Submit' on the form."
     ),
     Stage.PACKAGE: (
-        "GOAL: You've already collected requirements. Now recommend a package.\n"
-        "The package recommendation has been sent. Answer follow-up questions, "
-        "address concerns, and guide toward acceptance.\n"
-        "If the client agrees/accepts, set should_advance_stage=true.\n"
-        "Share UPI ID for payment when asked."
+        "GOAL: We have recommended a package based on their form inputs.\n"
+        "- Answer any questions they have about the package, pricing (including renewal pricing, automation package prices, and additional services), features, or timeline.\n"
+        "- The final goal is to prompt/guide the client to get on a Google Meet or phone call to finalize slot bookings and answer any remaining questions.\n"
+        "- If the client agrees to get on a Google Meet/phone call (or says 'Haan, call/meet karo', 'Call me', 'Let\'s schedule a call', etc.), set should_advance_stage=true."
+    ),
+    Stage.CALL_SCHEDULE: (
+        "GOAL: The client has agreed to a call. Schedule a specific time.\n"
+        "- Ask the client for their preferred date and time for a Google Meet or phone call.\n"
+        "- Suggest available slots like 'Kal 11am ya 3pm, kab free hain?'\n"
+        "- Be flexible and accommodate their schedule.\n"
+        "- Once they confirm a specific time/date (or say 'abhi call karo', 'kal theek hai', etc.), set should_advance_stage=true.\n"
+        "- Capture any scheduling info in data_collected (e.g. 'call_time': 'Tomorrow 3pm')."
+    ),
+    Stage.CONTRACT: (
+        "GOAL: Share contract terms and get agreement from the client.\n"
+        "- The contract terms have been sent in a separate message. Your job is to answer any questions about the terms.\n"
+        "- Key terms: 50% advance payment, balance after website approval, timeline as per package, revision rounds as per package, written agreement.\n"
+        "- If the client agrees to the terms (says 'Theek hai', 'Done', 'Agree', 'Accept', 'Haan chalega'), set should_advance_stage=true.\n"
+        "- If they have concerns, address them professionally. If they want changes, explain standard policy."
+    ),
+    Stage.PAYMENT: (
+        "GOAL: Collect 50% advance payment from the client.\n"
+        "- Payment details have been sent. Your job is to assist with any payment questions.\n"
+        "- UPI ID: {upi_id}\n"
+        "- Accepted: GPay, PhonePe, Paytm, Bank Transfer\n"
+        "- If the client says they have paid (e.g. 'Payment done', 'Paid', 'Bhej diya', 'Screenshot bheja'), set should_advance_stage=true.\n"
+        "- Remind them to share a payment screenshot for confirmation.\n"
+        "- Be patient — don't rush. Let them pay at their convenience."
+    ),
+    Stage.DEMO: (
+        "GOAL: The client has paid. A demo website is being prepared / has been shared.\n"
+        "- Reassure the client that work has started and they will receive a demo preview soon.\n"
+        "- If they ask about timeline, refer to the package delivery time.\n"
+        "- If the client approves the demo (says 'APPROVED', 'Approved', 'Perfect', 'Bahut accha', 'Go live'), set should_advance_stage=true.\n"
+        "- If they want changes, note down the requested changes in data_collected and acknowledge.\n"
+        "- Do NOT set should_advance_stage=true until they explicitly approve."
     ),
 }
 
 
 def _format_packages() -> str:
     """Format package info for the system prompt."""
-    lines: list[str] = []
+    lines: list[str] = ["WEBSITE DEVELOPMENT PACKAGES:"]
     for pkg in PACKAGES.values():
         features = ", ".join(pkg["features"])
-        lines.append(f"  • {pkg['name']}: {pkg['price_display']} — {features}")
+        lines.append(
+            f"  • {pkg['name']}: {pkg['price_display']} "
+            f"(Renewal: {pkg['renewal_price']}/year, Delivery: {pkg['delivery_time']}, Revisions: {pkg['revision_count']}) "
+            f"— {features}"
+        )
+    
+    lines.append("\nBUSINESS AUTOMATION PACKAGES:")
+    for pkg in AUTOMATION_PACKAGES.values():
+        features = ", ".join(pkg["features"])
+        lines.append(f"  • {pkg['name']}: {pkg['price_display']} (Delivery: {pkg['delivery_time']}) — {features}")
+        
+    lines.append("\nADDITIONAL SERVICES:")
+    for svc, details in ADDITIONAL_SERVICES.items():
+        lines.append(f"  • {svc}: {details}")
+        
     return "\n".join(lines)
 
 
@@ -141,6 +185,7 @@ def process_message(
     stage: Stage,
     history: list[dict[str, Any]],
     collected_data: dict[str, Any] | None = None,
+    phone: str = "",
 ) -> dict[str, Any]:
     """
     Process an incoming WhatsApp message using Gemini AI.
@@ -150,18 +195,23 @@ def process_message(
         stage: Current conversation stage.
         history: Last N messages from the conversation history.
         collected_data: Previously collected requirement fields.
+        phone: Client's phone number.
 
     Returns:
         Dict with keys: ``response``, ``data_collected``,
-        ``should_advance_stage``, ``sentiment``, ``is_not_interested``.
+        "should_advance_stage", "sentiment", "is_not_interested".
     """
     collected_data = collected_data or {}
 
-    # Build stage-specific instructions
-    stage_instr = _STAGE_INSTRUCTIONS.get(stage, "")
-    if stage == Stage.REQUIREMENTS:
-        missing = get_missing_fields(collected_data)
-        stage_instr = stage_instr.format(missing_fields=", ".join(missing) or "None")
+    from config.settings import SERVER_PUBLIC_URL
+    form_link = f"{SERVER_PUBLIC_URL}/requirements-form/{phone}" if phone else f"{SERVER_PUBLIC_URL}/requirements-form"
+
+    # Build stage-specific instructions and format the form_link into them
+    stage_instr = _STAGE_INSTRUCTIONS.get(stage, "").format(
+        form_link=form_link,
+        upi_id=UPI_ID,
+    )
+
 
     system_prompt = _BASE_SYSTEM_PROMPT.format(
         agent_name=AGENT_NAME,
@@ -227,6 +277,22 @@ def _fallback_response(stage: Stage) -> dict[str, Any]:
             "Bahut accha! 😊 Agar aapko koi sawal hai package ke baare mein, "
             "to zaroor puchiye. Main yahan help karne ke liye hoon!"
         ),
+        Stage.CALL_SCHEDULE: (
+            "Call schedule karne ke liye — aap kal ya parson kab free hain? "
+            "Main time fix karta hoon! 📞"
+        ),
+        Stage.CONTRACT: (
+            "Contract ke baare mein koi bhi sawal ho to puchiye! 📝 "
+            "Main sab clear kar dunga."
+        ),
+        Stage.PAYMENT: (
+            "Payment ke liye UPI ID bhej diya hai. 💳 "
+            "Koi bhi issue ho to batao — main help karunga!"
+        ),
+        Stage.DEMO: (
+            "Aapki website ka demo jaldi ready hoga! 🎨 "
+            "Thoda patience rakhiye — bahut accha banega!"
+        ),
     }
     return {
         "response": fallbacks.get(stage, "Dhanyawad! Main jaldi reply karungi. 😊"),
@@ -248,10 +314,10 @@ def recommend_package(collected_data: dict[str, Any]) -> dict[str, Any]:
     budget = str(collected_data.get("budget", "")).lower()
 
     # Simple rule-based recommendation
-    if any(kw in features for kw in ["ecommerce", "e-commerce", "online store", "payment"]):
-        return PACKAGES["Premium"]
-    if any(kw in features for kw in ["booking", "admin", "dashboard"]):
-        return PACKAGES["Premium"]
+    if any(kw in features for kw in ["ecommerce", "e-commerce", "online store", "shop", "cart"]):
+        return PACKAGES["E-Commerce"]
+    if any(kw in features for kw in ["booking", "admin", "dashboard", "payment", "razorpay"]):
+        return PACKAGES["Professional"]
 
     # Check page count
     try:
@@ -259,16 +325,18 @@ def recommend_package(collected_data: dict[str, Any]) -> dict[str, Any]:
     except ValueError:
         page_count = 0
 
-    if page_count > 7:
-        return PACKAGES["Premium"]
-    if page_count > 3:
-        return PACKAGES["Business"]
+    if page_count > 5:
+        return PACKAGES["Professional"]
+    if page_count > 1:
+        return PACKAGES["Starter"]
+    if "single" in pages or "one" in pages or page_count == 1:
+        return PACKAGES["Single Page"]
 
     # Check budget hints
     if any(kw in budget for kw in ["low", "kam", "sasta", "cheap", "basic"]):
         return PACKAGES["Starter"]
     if any(kw in budget for kw in ["premium", "best", "full", "unlimited"]):
-        return PACKAGES["Premium"]
+        return PACKAGES["Professional"]
 
-    # Default to Business (best value)
-    return PACKAGES["Business"]
+    # Default to Professional (best seller)
+    return PACKAGES["Professional"]
