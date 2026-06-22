@@ -3,22 +3,27 @@ FROM python:3.12-slim AS builder
 
 WORKDIR /app
 
-# Install system deps for Playwright
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install system deps for Playwright browser download and extraction
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
+    ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Python deps
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Update apt package index and install chromium with system dependencies
-RUN apt-get update && playwright install --with-deps chromium && rm -rf /var/lib/apt/lists/*
+# Download chromium browser and its system dependencies cleanly
+RUN playwright install --with-deps chromium
 
 # ── Stage 2: Production image ─────────────────────────────────────
 FROM python:3.12-slim
 
 WORKDIR /app
+
+ENV DEBIAN_FRONTEND=noninteractive
 
 # Create non-root user for security
 RUN groupadd -r appuser && useradd -r -g appuser -s /sbin/nologin appuser
@@ -31,10 +36,28 @@ COPY --from=builder /usr/local/lib/python3.12/site-packages /usr/local/lib/pytho
 COPY --from=builder /usr/local/bin /usr/local/bin
 COPY --from=builder /root/.cache/ms-playwright /home/appuser/.cache/ms-playwright
 
-# Install Playwright system deps in production image
+# Install Playwright system deps and curl/ca-certificates in production image
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    libnss3 libatk-bridge2.0-0 libdrm2 libxkbcommon0 libgbm1 \
-    libpango-1.0-0 libcairo2 libasound2 libxshmfence1 \
+    curl \
+    ca-certificates \
+    libnss3 \
+    libnspr4 \
+    libatk1.0-0 \
+    libatk-bridge2.0-0 \
+    libcups2 \
+    libdrm2 \
+    libxkbcommon0 \
+    libxcomposite1 \
+    libxdamage1 \
+    libxfixes3 \
+    libxrandr2 \
+    libgbm1 \
+    libasound2 \
+    libpango-1.0-0 \
+    libpangocairo-1.0-0 \
+    libxss1 \
+    libxtst6 \
+    libxshmfence1 \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy source code

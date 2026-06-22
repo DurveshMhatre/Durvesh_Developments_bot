@@ -38,6 +38,7 @@ from utils.sheets_client import (
     get_leads_by_status,
     update_lead_field,
     update_lead_status,
+    get_cold_outreach_sent_today,
 )
 from utils.telegram_alert import send_alert
 
@@ -107,10 +108,17 @@ async def send_cold_outreach() -> int:
         logger.info("No leads ready for outreach.")
         return 0
 
+    already_sent = get_cold_outreach_sent_today()
+    logger.info("Cold messages already sent today: %d / %d", already_sent, MAX_COLD_MESSAGES_PER_DAY)
+    if already_sent >= MAX_COLD_MESSAGES_PER_DAY:
+        logger.info("Daily cold message limit already reached/exceeded today. Skipping cold outreach.")
+        return 0
+
     sent = 0
     for lead in leads:
-        if sent >= MAX_COLD_MESSAGES_PER_DAY:
-            logger.info("Daily cold message limit (%d) reached.", MAX_COLD_MESSAGES_PER_DAY)
+        if already_sent + sent >= MAX_COLD_MESSAGES_PER_DAY:
+            logger.info("Daily cold message limit (%d) reached (already sent: %d, sent in this run: %d).",
+                        MAX_COLD_MESSAGES_PER_DAY, already_sent, sent)
             break
 
         phone = str(lead.get("Phone", ""))

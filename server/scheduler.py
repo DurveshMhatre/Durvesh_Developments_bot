@@ -35,7 +35,9 @@ def _run_daily_scrape():
         get_all_leads,
         get_active_scrape_targets,
         update_scrape_target_last_scraped,
+        update_scrape_target_status,
     )
+    from config.settings import SKIP_PLAYWRIGHT_SCRAPING
 
     all_new_leads = []
 
@@ -52,33 +54,47 @@ def _run_daily_scrape():
                 continue
 
             logger.info("Running scrape for: %s in %s...", btype, city)
-            try:
-                # Google Maps
-                gmaps_leads = scrape_gmaps(city, btype)
-                all_new_leads.extend(gmaps_leads)
-            except Exception as exc:
-                logger.error("Google Maps scraper error (%s/%s): %s", city, btype, exc)
+            scrape_success = False
+
+            if not SKIP_PLAYWRIGHT_SCRAPING:
+                try:
+                    # Google Maps
+                    gmaps_leads = scrape_gmaps(city, btype)
+                    all_new_leads.extend(gmaps_leads)
+                    scrape_success = True
+                except Exception as exc:
+                    logger.error("Google Maps scraper error (%s/%s): %s", city, btype, exc)
+            else:
+                logger.info("Skipping Google Maps Playwright scraping (SKIP_PLAYWRIGHT_SCRAPING is True)")
 
             try:
                 # JustDial
                 justdial_leads = scrape_justdial(city, btype)
                 all_new_leads.extend(justdial_leads)
+                scrape_success = True
             except Exception as exc:
                 logger.error("JustDial scraper error (%s/%s): %s", city, btype, exc)
 
-            # Update last scraped timestamp in Sheets
+            # Update last scraped timestamp and status in Sheets
             update_scrape_target_last_scraped(row)
+            if scrape_success:
+                update_scrape_target_status(row, "Completed")
+            else:
+                update_scrape_target_status(row, "Failed")
     else:
         # Fallback to .env values if Google Sheets has no active targets
         logger.info("No active scrape targets in Google Sheets. Using config values: TARGET_CITIES=%s, BUSINESS_TYPES=%s", TARGET_CITIES, BUSINESS_TYPES)
         for city in TARGET_CITIES:
             for btype in BUSINESS_TYPES:
-                try:
-                    # Google Maps
-                    gmaps_leads = scrape_gmaps(city, btype)
-                    all_new_leads.extend(gmaps_leads)
-                except Exception as exc:
-                    logger.error("Google Maps scraper error (%s/%s): %s", city, btype, exc)
+                if not SKIP_PLAYWRIGHT_SCRAPING:
+                    try:
+                        # Google Maps
+                        gmaps_leads = scrape_gmaps(city, btype)
+                        all_new_leads.extend(gmaps_leads)
+                    except Exception as exc:
+                        logger.error("Google Maps scraper error (%s/%s): %s", city, btype, exc)
+                else:
+                    logger.info("Skipping Google Maps Playwright scraping (SKIP_PLAYWRIGHT_SCRAPING is True)")
 
                 try:
                     # JustDial
@@ -181,7 +197,7 @@ def start_scheduler() -> None:
 
     _scheduler = BackgroundScheduler()
 
-    # Daily scrape at configured hour (default 6 AM)
+    # Daily scrape at configured hour (default 10 AM)
     _scheduler.add_job(
         _run_daily_scrape,
         trigger=CronTrigger(hour=SCRAPE_SCHEDULE_HOUR, minute=0),
@@ -190,9 +206,10 @@ def start_scheduler() -> None:
         replace_existing=True,
     )
 
+    # Outreach cycle at 10 AM and 11 AM
     _scheduler.add_job(
         _run_outreach_cycle,
-        trigger=CronTrigger(hour="9-20/2", minute=0),
+        trigger=CronTrigger(hour="10,11", minute=0),
         id="outreach_cycle",
         name="Cold Outreach & Follow-ups",
         replace_existing=True,
@@ -210,9 +227,10 @@ def start_scheduler() -> None:
     _scheduler.start()
     logger.info(
         "Scheduler started with jobs: daily_scrape (@ %d:00), "
-        "outreach_cycle (every 2h 9-20), daily_summary (@ 21:00)",
+        "outreach_cycle (@ 10:00 & 11:00), daily_summary (@ 21:00)",
         SCRAPE_SCHEDULE_HOUR,
     )
+
 
 
 def shutdown_scheduler() -> None:

@@ -205,8 +205,10 @@ BUSINESS_TYPES: list[str] = [
 
 HIGH_VALUE_TYPES: set[str] = {"Salon", "Clinic", "Restaurant", "Gym", "Spa", "Dental"}
 
-SCRAPE_SCHEDULE_HOUR: int = int(os.getenv("SCRAPE_SCHEDULE_HOUR", "6"))
+SCRAPE_SCHEDULE_HOUR: int = int(os.getenv("SCRAPE_SCHEDULE_HOUR", "10"))
 MAX_COLD_MESSAGES_PER_DAY: int = int(os.getenv("MAX_COLD_MESSAGES_PER_DAY", "12"))
+SKIP_PLAYWRIGHT_SCRAPING: bool = os.getenv("SKIP_PLAYWRIGHT_SCRAPING", "false").lower() == "true"
+
 
 # ── WhatsApp-web.js Node server ──────────────────────────────────
 WHATSAPP_WEB_JS_URL: str = os.getenv("WHATSAPP_WEB_JS_URL", "http://localhost:3001")

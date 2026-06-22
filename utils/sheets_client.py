@@ -467,7 +467,7 @@ def save_package_recommendation(
 
 # ── Scrape Targets Configuration ─────────────────────────────────
 
-SCRAPE_TARGET_HEADERS = ["City", "Category", "Active", "LastScrapedAt"]
+SCRAPE_TARGET_HEADERS = ["City", "Category", "Active", "LastScrapedAt", "Status"]
 
 
 def get_active_scrape_targets() -> list[dict[str, Any]]:
@@ -483,7 +483,8 @@ def get_active_scrape_targets() -> list[dict[str, Any]]:
         active_targets = []
         for idx, r in enumerate(records, start=2):
             active_val = str(r.get("Active", "")).strip().lower()
-            if active_val in ("true", "yes", "1", "active"):
+            status_val = str(r.get("Status", "")).strip().lower()
+            if active_val in ("true", "yes", "1", "active") and status_val != "completed":
                 active_targets.append({
                     "city": str(r.get("City", "")).strip(),
                     "category": str(r.get("Category", "")).strip(),
@@ -505,3 +506,40 @@ def update_scrape_target_last_scraped(row: int) -> None:
         logger.info("Updated scrape target row %d with last scraped timestamp.", row)
     except Exception as exc:
         logger.error("Failed to update scrape target row %d timestamp: %s", row, exc)
+
+
+def update_scrape_target_status(row: int, status: str) -> None:
+    """Update the Status cell for a specific scrape target row (e.g. 'Completed', 'Failed')."""
+    try:
+        ss = _get_spreadsheet()
+        ws = _ensure_worksheet(ss, "ScrapeTargets", SCRAPE_TARGET_HEADERS)
+        status_col = SCRAPE_TARGET_HEADERS.index("Status") + 1
+        ws.update_cell(row, status_col, status)
+        logger.info("Updated scrape target row %d with status '%s'.", row, status)
+    except Exception as exc:
+        logger.error("Failed to update scrape target row %d status: %s", row, exc)
+
+
+def get_cold_outreach_sent_today() -> int:
+    """
+    Count the number of cold outreach messages sent today (UTC).
+    Queries the 'Conversations' worksheet for outbound messages with stage 'WELCOME'.
+    """
+    try:
+        ss = _get_spreadsheet()
+        ws = _ensure_worksheet(ss, "Conversations", CONVERSATION_HEADERS)
+        records = ws.get_all_records()
+        today_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        count = 0
+        for r in records:
+            ts = str(r.get("Timestamp", ""))
+            direction = str(r.get("Direction", "")).strip().lower()
+            stage = str(r.get("Stage", "")).strip().upper()
+            if ts.startswith(today_str) and direction == "out" and stage == "WELCOME":
+                count += 1
+        logger.info("Cold outreach messages sent today: %d", count)
+        return count
+    except Exception as exc:
+        logger.error("Failed to count cold outreach sent today: %s", exc)
+        return 0
+
