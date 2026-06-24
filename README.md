@@ -129,6 +129,50 @@ ai-web-automation/
 └── data/                # Local fallback storage (auto-created)
 ```
 
+## VPS Server Management
+
+If you have deployed this project to a Linux VPS (e.g. Hetzner) using the `whatsapp-bot.service` systemd service, use these commands to manage it.
+
+### 1. How to Run the Bot on the Server
+Start the bot service and enable it to start automatically on system boot:
+```bash
+# Enable the service (runs on system boot)
+systemctl enable whatsapp-bot
+
+# Start the bot service immediately
+systemctl start whatsapp-bot
+```
+
+### 2. How to Check Current Status of the Bot on the Server
+Verify that the bot is running, inspect details, and view console logs:
+```bash
+# Check if the service is active and running
+systemctl status whatsapp-bot
+
+# View the last 50 lines of logs
+journalctl -u whatsapp-bot -n 50 --no-pager
+
+# View live logs in real-time (press Ctrl + C to exit)
+journalctl -u whatsapp-bot -f
+```
+
+### 3. How to Stop the Bot in the Server
+Stop the background execution of the bot:
+```bash
+# Stop the bot service
+systemctl stop whatsapp-bot
+
+# Disable auto-start on boot (optional)
+systemctl disable whatsapp-bot
+```
+
+### 4. Restarting the Bot
+If you modify `.env` or configurations, restart the service to apply changes:
+```bash
+# Restart the bot service
+systemctl restart whatsapp-bot
+```
+
 ## API Endpoints
 
 | Endpoint | Method | Description |
